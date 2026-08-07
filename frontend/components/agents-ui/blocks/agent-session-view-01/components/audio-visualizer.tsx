@@ -31,15 +31,15 @@ interface AudioVisualizerProps extends MotionProps {
 }
 
 export function AudioVisualizer({
-  audioVisualizerType = 'bar',
-  audioVisualizerColor,
+  audioVisualizerType = 'wave',
+  audioVisualizerColor = '#ff770f',
   audioVisualizerColorShift = 0.3,
   audioVisualizerBarCount = 5,
   audioVisualizerRadialRadius = 100,
   audioVisualizerRadialBarCount = 25,
   audioVisualizerGridRowCount = 15,
   audioVisualizerGridColumnCount = 15,
-  audioVisualizerWaveLineWidth = 3,
+  audioVisualizerWaveLineWidth = 2,
   isChatOpen,
   className,
   ...props
@@ -68,6 +68,7 @@ export function AudioVisualizer({
             color={audioVisualizerColor}
             colorShift={audioVisualizerColorShift}
             lineWidth={isChatOpen ? audioVisualizerWaveLineWidth * 2 : audioVisualizerWaveLineWidth}
+            blur={0.1}
             className="size-[300px] md:size-[450px]"
           />
         </motion.div>
