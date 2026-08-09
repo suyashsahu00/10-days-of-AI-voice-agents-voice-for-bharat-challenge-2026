@@ -33,10 +33,22 @@ export function App({ appConfig }: AppProps) {
       : TokenSource.endpoint('/api/token');
   }, [appConfig]);
 
-  const session = useSession(
-    tokenSource,
-    appConfig.agentName ? { agentName: appConfig.agentName } : undefined
-  );
+  const sessionOptions = useMemo(() => {
+    let participantIdentity: string | undefined;
+    if (typeof window !== 'undefined') {
+      participantIdentity = localStorage.getItem('sydney_user_id') ?? undefined;
+      if (!participantIdentity) {
+        participantIdentity = crypto.randomUUID();
+        localStorage.setItem('sydney_user_id', participantIdentity);
+      }
+    }
+    return {
+      ...(appConfig.agentName ? { agentName: appConfig.agentName } : {}),
+      participantIdentity,
+    };
+  }, [appConfig]);
+
+  const session = useSession(tokenSource, sessionOptions);
 
   return (
     <AgentSessionProvider session={session}>

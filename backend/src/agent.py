@@ -1,3 +1,4 @@
+import json
 import logging
 
 from dotenv import load_dotenv
@@ -6,21 +7,24 @@ from livekit.agents import (
     Agent,
     AgentServer,
     AgentSession,
+    ChatContext,
     JobContext,
     JobProcess,
+    RunContext,
     cli,
+    function_tool,
     room_io,
     tokenize,
 )
 from livekit.plugins import deepgram, google, murf, noise_cancellation, silero
 from livekit.plugins.turn_detector.multilingual import MultilingualModel
 
+from db import get_caller, init_db, save_caller
+
 logger = logging.getLogger("agent")
 
 load_dotenv(".env.local")
 
-# Change this prompt to change what your voice agent does.
-# See README.md for example prompts (customer support, language tutor, receptionist).
 SYSTEM_PROMPT = """IDENTITY
 You are Sydney, an AI/ML learning companion built for the "Learning & Literacy"
 track of 10 Days of Voice Agents, powered by Murf Falcon TTS. You work for the
@@ -92,6 +96,14 @@ something like "I'm just stupid" — stop teaching, acknowledge directly
 and suggest a human mentor/instructor for anything beyond a quick concept
 check. Do not diagnose, do not push through.
 
+MEMORY & CONSENT
+- Before calling remember_caller_fact, say so out loud and wait for a yes —
+  e.g. "Main yeh yaad rakh loon, next time se continue kar sakein?"
+- If they decline, do not call the tool. Continue the conversation normally,
+  do not ask again in the same call.
+- Only store facts relevant to their AI/ML learning: current_level,
+  topics_covered, common_mistakes. Nothing else.
+
 STYLE
 Short sentences (under ~20 words) — this is spoken, not read. No bulleted
 lists out loud; if you'd write a list, turn it into "first... then... and
@@ -118,25 +130,41 @@ VOICE REALISM
 
 
 class Assistant(Agent):
-    def __init__(self) -> None:
-        super().__init__(instructions=SYSTEM_PROMPT)
+    def __init__(self, chat_ctx: ChatContext, user_id: str) -> None:
+        super().__init__(instructions=SYSTEM_PROMPT, chat_ctx=chat_ctx)
+        self.user_id = user_id
 
-    # To add tools, use the @function_tool decorator.
-    # Here's an example that adds a simple weather tool.
-    # You also have to add `from livekit.agents import function_tool, RunContext` to the top of this file
-    # @function_tool
-    # async def lookup_weather(self, context: RunContext, location: str):
-    #     """Use this tool to look up current weather information in the given location.
-    #
-    #     If the location is not supported by the weather service, the tool will indicate this. You must tell the user the location's weather is unavailable.
-    #
-    #     Args:
-    #         location: The location to look up weather information for (e.g. city name)
-    #     """
-    #
-    #     logger.info(f"Looking up weather for {location}")
-    #
-    #     return "sunny with a temperature of 70 degrees."
+    @function_tool
+    async def lookup_caller(self, context: RunContext) -> str:
+        """Use this if you're unsure what you already know about the caller,
+        or want to double check a fact before referencing it."""
+        caller = get_caller(self.user_id)
+        return (
+            json.dumps(caller) if caller else "No record found — this is a new caller."
+        )
+
+    @function_tool
+    async def remember_caller_fact(
+        self,
+        context: RunContext,
+        name: str,
+        language_preference: str,
+        facts: dict,
+    ) -> str:
+        """Save what you just learned about the caller.
+        Only call this after you have explicitly asked permission and the
+        caller said yes. facts should be short key-value pairs about their
+        learning progress only — e.g. current_level, topics_covered,
+        common_mistakes. Never store unrelated personal information.
+
+        Args:
+            name: the caller's name
+            language_preference: their preferred language, e.g. "Hindi", "English", "Hinglish"
+            facts: dict of learning-relevant facts to remember
+        """
+        save_caller(self.user_id, name, language_preference, facts)
+        logger.info(f"Saved facts for {self.user_id}")
+        return "Saved."
 
 
 server = AgentServer()
@@ -144,6 +172,7 @@ server = AgentServer()
 
 def prewarm(proc: JobProcess):
     proc.userdata["vad"] = silero.VAD.load()
+    init_db()
 
 
 server.setup_fnc = prewarm
@@ -151,60 +180,52 @@ server.setup_fnc = prewarm
 
 @server.rtc_session(agent_name="my-agent")
 async def my_agent(ctx: JobContext):
-    # Logging setup
-    # Add any other context you want in all log entries here
     ctx.log_context_fields = {
         "room": ctx.room.name,
     }
 
-    # Set up a voice AI pipeline using Murf Falcon, Gemini, Deepgram, and the LiveKit turn detector
+    await ctx.connect()
+    participant = await ctx.wait_for_participant()
+    user_id = participant.identity
+
+    caller = get_caller(user_id)
+
+    initial_ctx = ChatContext()
+    if caller:
+        initial_ctx.add_message(
+            role="assistant",
+            content=(
+                f"Returning caller. Name: {caller['name']}. "
+                f"Language preference: {caller['language_preference']}. "
+                f"Known facts: {json.dumps(caller['facts'])}. "
+                "Greet them by name and reference something specific from what "
+                "you already know, then ask a natural follow-up before continuing."
+            ),
+        )
+    else:
+        initial_ctx.add_message(
+            role="assistant",
+            content="New caller, no record exists yet. This is a first-time introduction.",
+        )
+
     session = AgentSession(
-        # Speech-to-text (STT) is your agent's ears, turning the user's speech into text that the LLM can understand
-        # See all available models at https://docs.livekit.io/agents/models/stt/
         stt=deepgram.STT(model="nova-3", language="multi"),
-        # A Large Language Model (LLM) is your agent's brain, processing user input and generating a response
-        # See all available models at https://docs.livekit.io/agents/models/llm/
         llm=google.LLM(
             model="gemini-3.5-flash-lite",
         ),
-        # Text-to-speech (TTS) is your agent's voice, turning the LLM's text into speech that the user can hear
-        # See all available models as well as voice selections at https://docs.livekit.io/agents/models/tts/
         tts=murf.TTS(
             voice="Anisha",
             style="Conversation",
             tokenizer=tokenize.basic.SentenceTokenizer(min_sentence_len=2),
             text_pacing=True,
         ),
-        # VAD and turn detection are used to determine when the user is speaking and when the agent should respond
-        # See more at https://docs.livekit.io/agents/build/turns
         turn_detection=MultilingualModel(),
         vad=ctx.proc.userdata["vad"],
-        # allow the LLM to generate a response while waiting for the end of turn
-        # See more at https://docs.livekit.io/agents/build/audio/#preemptive-generation
         preemptive_generation=True,
     )
 
-    # To use a realtime model instead of a voice pipeline, use the following session setup instead.
-    # (Note: This is for the OpenAI Realtime API. For other providers, see https://docs.livekit.io/agents/models/realtime/))
-    # 1. Install livekit-agents[openai]
-    # 2. Set OPENAI_API_KEY in .env.local
-    # 3. Add `from livekit.plugins import openai` to the top of this file
-    # 4. Use the following session setup instead of the version above
-    # session = AgentSession(
-    #     llm=openai.realtime.RealtimeModel(voice="marin")
-    # )
-
-    # # Add a virtual avatar to the session, if desired
-    # # For other providers, see https://docs.livekit.io/agents/models/avatar/
-    # avatar = hedra.AvatarSession(
-    #   avatar_id="...",  # See https://docs.livekit.io/agents/models/avatar/plugins/hedra
-    # )
-    # # Start the avatar and wait for it to join
-    # await avatar.start(session, room=ctx.room)
-
-    # Start the session, which initializes the voice pipeline and warms up the models
     await session.start(
-        agent=Assistant(),
+        agent=Assistant(chat_ctx=initial_ctx, user_id=user_id),
         room=ctx.room,
         room_options=room_io.RoomOptions(
             audio_input=room_io.AudioInputOptions(
@@ -217,9 +238,6 @@ async def my_agent(ctx: JobContext):
             ),
         ),
     )
-
-    # Join the room and connect to the user
-    await ctx.connect()
 
 
 if __name__ == "__main__":
