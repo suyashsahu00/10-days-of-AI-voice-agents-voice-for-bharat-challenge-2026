@@ -22,6 +22,7 @@ interface AudioVisualizerProps extends MotionProps {
   audioVisualizerColor?: `#${string}`;
   audioVisualizerColorShift?: number;
   audioVisualizerWaveLineWidth?: number;
+  audioVisualizerWaveBlur?: number;
   audioVisualizerGridRowCount?: number;
   audioVisualizerGridColumnCount?: number;
   audioVisualizerRadialBarCount?: number;
@@ -40,6 +41,7 @@ export function AudioVisualizer({
   audioVisualizerGridRowCount = 15,
   audioVisualizerGridColumnCount = 15,
   audioVisualizerWaveLineWidth = 3,
+  audioVisualizerWaveBlur = 0.1,
   isChatOpen,
   className,
   ...props
@@ -68,6 +70,7 @@ export function AudioVisualizer({
             color={audioVisualizerColor}
             colorShift={audioVisualizerColorShift}
             lineWidth={isChatOpen ? audioVisualizerWaveLineWidth * 2 : audioVisualizerWaveLineWidth}
+            blur={audioVisualizerWaveBlur}
             className="size-[300px] md:size-[450px]"
           />
         </motion.div>
