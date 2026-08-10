@@ -260,6 +260,17 @@ For deeper documentation on each part, see:
 
 ---
 
+## Data Sources
+
+- **Caller memory (Day 4)**: SQLite, local, generated at runtime.
+- **Practice exercises (Day 5)**: `backend/src/exercises.json` — a hand-curated
+  local dataset, not a live API. No public dataset exists for "next AI/ML
+  exercise by learner level," so this was built manually, covering the same
+  five topics as Sydney's core knowledge scope (RAG, backprop, embeddings,
+  LangGraph, chunking) across three levels. Static, last updated 2026-08-10.
+
+---
+
 ## Links
 
 - [Murf API Docs](https://murf.ai/api/docs)
