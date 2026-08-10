@@ -1,12 +1,15 @@
-import sqlite3
 import json
+import sqlite3
 from pathlib import Path
 
 DB_PATH = Path(__file__).parent / "sydney_memory.db"
 
+
 def check_database():
     if not DB_PATH.exists():
-        print("Database file does not exist yet. Start a conversation with Sydney first!")
+        print(
+            "Database file does not exist yet. Start a conversation with Sydney first!"
+        )
         return
 
     conn = sqlite3.connect(DB_PATH)
@@ -26,11 +29,12 @@ def check_database():
         print(f"Last Interaction:   {row['last_interaction']}")
         print("Facts:")
         try:
-            facts_obj = json.loads(row['facts']) if row['facts'] else {}
+            facts_obj = json.loads(row["facts"]) if row["facts"] else {}
             print(json.dumps(facts_obj, indent=2))
         except Exception:
             print(f"  {row['facts']}")
         print("-" * 50)
+
 
 if __name__ == "__main__":
     check_database()
