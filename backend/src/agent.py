@@ -1,5 +1,7 @@
 import json
 import logging
+import random
+from pathlib import Path
 
 from dotenv import load_dotenv
 from livekit import rtc
@@ -104,6 +106,20 @@ MEMORY & CONSENT
 - Only store facts relevant to their AI/ML learning: current_level,
   topics_covered, common_mistakes. Nothing else.
 
+EXERCISES
+- Once the learner has just correctly explained or clearly grasped a concept
+  in the conversation, proactively offer a quick practice exercise using
+  fetch_next_exercise — don't wait to be asked.
+- Do not offer an exercise before a concept has actually landed, and never
+  offer two exercises back to back without a concept explanation in between.
+- Speak the exercise question naturally, as if you thought of it yourself —
+  never read it out with any JSON/list formatting or say "the data says."
+- If the tool reports the practice set is unavailable, say so plainly in one
+  short sentence and move straight into talking through the concept verbally
+  instead of stalling or inventing a question.
+- Data note: this is a static, hand-built practice set, not a live feed —
+  no need to mention "today's" or "latest," just call it "my practice set."
+
 STYLE
 Short sentences (under ~20 words) — this is spoken, not read. No bulleted
 lists out loud; if you'd write a list, turn it into "first... then... and
@@ -165,6 +181,63 @@ class Assistant(Agent):
         save_caller(self.user_id, name, language_preference, facts)
         logger.info(f"Saved facts for {self.user_id}")
         return "Saved."
+
+    @function_tool
+    async def fetch_next_exercise(
+        self,
+        context: RunContext,
+        level: str,
+        topic: str | None = None,
+    ) -> str:
+        """Fetch a practice exercise for the learner from Sydney's static
+        practice set. Call this PROACTIVELY, without being asked, once the
+        learner has just demonstrated understanding of a concept in
+        conversation — offer it as a natural next step, e.g. "chalo isko
+        thoda test karte hain." Do not call this at the start of a call or
+        mid-explanation, only after a concept has actually landed.
+
+        Args:
+            level: the learner's current level — one of "beginner",
+                "intermediate", "advanced". Infer this from how the
+                conversation has gone so far, or ask if unclear.
+            topic: optional, one of "RAG", "backprop", "embeddings",
+                "LangGraph", "chunking". Omit to get any topic at that level.
+        """
+        try:
+            path = Path(__file__).parent / "exercises.json"
+            with open(path, encoding="utf-8") as f:
+                data = json.load(f)
+
+            pool = [e for e in data["exercises"] if e["level"] == level.lower()]
+            if topic:
+                topic_pool = [e for e in pool if e["topic"].lower() == topic.lower()]
+                if topic_pool:
+                    pool = topic_pool
+
+            if not pool:
+                return (
+                    f"No exercise found for level '{level}'"
+                    + (f" and topic '{topic}'" if topic else "")
+                    + ". Tell the learner you don't have a matching exercise "
+                    "right now and offer to just talk through the concept instead."
+                )
+
+            exercise = random.choice(pool)
+            return (
+                f"Exercise from Sydney's practice set: {exercise['question']} "
+                f"(Hint if they get stuck: {exercise['hint']}) "
+                "Ask this naturally in conversation, don't read it robotically. "
+                "Do not give away the hint unless they're stuck."
+            )
+
+        except (FileNotFoundError, json.JSONDecodeError, KeyError) as e:
+            logger.warning(f"fetch_next_exercise failed: {e}")
+            return (
+                "The practice set is unavailable right now. Tell the learner, "
+                "in your own natural voice, that you can't pull a structured "
+                "question at the moment, and offer to just talk through the "
+                "concept together instead — do not invent a fake exercise."
+            )
 
 
 server = AgentServer()

@@ -1,0 +1,27 @@
+{
+  "source": "Hand-curated by Sydney's creator for the Voice for Bharat challenge. Not live data — static practice set, last updated 2026-08-10.",
+  "exercises": [
+    {"id": "rag-b1", "level": "beginner", "topic": "RAG", "question": "Agar tumhare paas ek LLM hai jo sirf 2023 tak ka data jaanta hai, aur tumhe usse aaj ki news ke baare mein sahi jawab chahiye — RAG isme kaise madad karega, apne shabdon mein batao?", "hint": "Socho retrieval step LLM ko kya deta hai, generation se pehle."},
+    {"id": "rag-b2", "level": "beginner", "topic": "RAG", "question": "RAG mein 'retrieval' aur 'generation' — in dono steps ka kaam alag alag kya hai?", "hint": "Ek step data dhoondta hai, doosra jawab likhta hai."},
+    {"id": "rag-i1", "level": "intermediate", "topic": "RAG", "question": "Agar tumhare RAG system ka retrieval step galat ya irrelevant document laa raha hai, toh final answer par iska kya asar padega, aur tum isse kaise debug karoge?", "hint": "Garbage in, garbage out — retrieval quality directly answer quality decide karta hai."},
+    {"id": "rag-i2", "level": "intermediate", "topic": "RAG", "question": "Vector similarity search aur keyword search mein RAG ke liye kya trade-off hai? Kab dono ko combine karna better hota hai?", "hint": "Semantic meaning vs exact term match."},
+    {"id": "rag-a1", "level": "advanced", "topic": "RAG", "question": "Ek RAG pipeline mein hallucination phir bhi ho sakta hai, chahe retrieval sahi document laaye — yeh kaise possible hai, aur isse kaise kam karoge?", "hint": "Retrieval sahi hone ka matlab generation bhi sahi hoga, yeh guarantee nahi hai."},
+
+    {"id": "bp-b1", "level": "beginner", "topic": "backprop", "question": "Backpropagation mein 'error' pehle kahan calculate hota hai — network ke start mein ya end mein?", "hint": "Forward pass ke baad, output se compare karke."},
+    {"id": "bp-b2", "level": "beginner", "topic": "backprop", "question": "Agar ek neural network ka loss training ke dauraan kam nahi ho raha, toh backprop se related sabse pehla cheez kya check karoge?", "hint": "Gradient flow ho bhi raha hai ya nahi."},
+    {"id": "bp-i1", "level": "intermediate", "topic": "backprop", "question": "Chain rule backpropagation mein kyun zaroori hai — agar chain rule na ho toh kya problem aayegi?", "hint": "Network mein multiple layers hain, error ko peeche tak propagate karna hai."},
+    {"id": "bp-a1", "level": "advanced", "topic": "backprop", "question": "Vanishing gradient problem backprop ke context mein kya hai, aur yeh deep networks mein zyada kyun hota hai?", "hint": "Chhote gradients baar baar multiply hone par kya hota hai."},
+
+    {"id": "emb-b1", "level": "beginner", "topic": "embeddings", "question": "Embedding ek word ya sentence ko numbers mein kyun convert karta hai — iska fayda kya hai?", "hint": "Machine ko text samajhne ke liye numbers chahiye, aur similar meaning wale numbers close hone chahiye."},
+    {"id": "emb-i1", "level": "intermediate", "topic": "embeddings", "question": "Do sentences ka embedding similar hai — iska exactly kya matlab hai vector space mein?", "hint": "Distance ya cosine similarity ke through socho."},
+    {"id": "emb-a1", "level": "advanced", "topic": "embeddings", "question": "Ek hi word ka embedding different contexts mein different kyun hota hai modern models mein, purane word2vec jaise models ke against?", "hint": "Contextual embeddings vs static embeddings ka fark."},
+
+    {"id": "lg-b1", "level": "beginner", "topic": "LangGraph", "question": "LangGraph mein 'node' aur 'edge' — yeh do concepts basic level par kya represent karte hain?", "hint": "Ek step ka kaam, aur agla step kaunsa hoga uska decision."},
+    {"id": "lg-i1", "level": "intermediate", "topic": "LangGraph", "question": "Simple linear chain aur LangGraph jaisa graph-based agent — inme structural difference kya hai, aur graph kab zyada useful hota hai?", "hint": "Conditional branches aur loops handle karne ki capability."},
+    {"id": "lg-a1", "level": "advanced", "topic": "LangGraph", "question": "Agar ek LangGraph agent ke andar do nodes ek doosre ko baar baar call kar rahe hain, toh yeh design mein kya risk create karta hai, aur kaise prevent karoge?", "hint": "Infinite loop aur uska exit condition."},
+
+    {"id": "ch-b1", "level": "beginner", "topic": "chunking", "question": "Ek bade document ko RAG system mein daalne se pehle chunks mein kyun todte hain?", "hint": "Retrieval aur context window limitations ke baare mein socho."},
+    {"id": "ch-i1", "level": "intermediate", "topic": "chunking", "question": "Agar chunk size bahut chhota rakha jaaye toh kya problem aa sakti hai retrieval mein, aur bahut bada rakhne se kya problem hai?", "hint": "Context loss vs irrelevant information dono directions mein socho."},
+    {"id": "ch-a1", "level": "advanced", "topic": "chunking", "question": "Fixed-size chunking aur semantic chunking mein kya fark hai, aur semantic chunking kab zyada accurate retrieval deta hai?", "hint": "Boundary kahan cut ho raha hai — arbitrary character count par ya meaning ke hisaab se."}
+  ]
+}
