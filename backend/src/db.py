@@ -1,0 +1,94 @@
+import os
+import sqlite3
+from typing import Optional
+
+DB_PATH = os.path.join(os.path.dirname(__file__), "sydney_memory.db")
+
+
+def init_db():
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS callers (
+            user_id TEXT PRIMARY KEY,
+            name TEXT,
+            last_topic TEXT,
+            facts TEXT,
+            opted_out INTEGER DEFAULT 0,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
+    cursor.execute("PRAGMA table_info(callers)")
+    existing_cols = {row[1] for row in cursor.fetchall()}
+
+    columns_to_add = {
+        "name": "TEXT",
+        "last_topic": "TEXT",
+        "facts": "TEXT",
+        "opted_out": "INTEGER DEFAULT 0",
+        "updated_at": "TIMESTAMP",
+    }
+
+    for col, col_type in columns_to_add.items():
+        if col not in existing_cols:
+            cursor.execute(f"ALTER TABLE callers ADD COLUMN {col} {col_type}")
+
+    conn.commit()
+    conn.close()
+
+
+def get_caller(user_id: str):
+    init_db()
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT user_id, name, last_topic, facts, opted_out FROM callers WHERE user_id = ?",
+        (user_id,),
+    )
+    row = cursor.fetchone()
+    conn.close()
+    if row:
+        return dict(row)
+    return None
+
+
+def save_caller(
+    user_id: str,
+    name: Optional[str] = None,
+    last_topic: Optional[str] = None,
+    facts: Optional[str] = None,
+    opted_out: bool = False,
+):
+    init_db()
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    existing = get_caller(user_id)
+    if existing:
+        name = name if name is not None else existing.get("name")
+        last_topic = (
+            last_topic if last_topic is not None else existing.get("last_topic")
+        )
+        facts = facts if facts is not None else existing.get("facts")
+        opted_out_int = 1 if opted_out else existing.get("opted_out", 0)
+        cursor.execute(
+            """
+            UPDATE callers
+            SET name = ?, last_topic = ?, facts = ?, opted_out = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE user_id = ?
+            """,
+            (name, last_topic, facts, opted_out_int, user_id),
+        )
+    else:
+        opted_out_int = 1 if opted_out else 0
+        cursor.execute(
+            """
+            INSERT INTO callers (user_id, name, last_topic, facts, opted_out)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (user_id, name, last_topic, facts, opted_out_int),
+        )
+    conn.commit()
+    conn.close()

@@ -1,4 +1,7 @@
+import json
 import logging
+import os
+from typing import Optional
 
 from dotenv import load_dotenv
 from livekit import rtc
@@ -8,16 +11,21 @@ from livekit.agents import (
     AgentSession,
     JobContext,
     JobProcess,
+    RunContext,
     cli,
+    function_tool,
     room_io,
     tokenize,
 )
 from livekit.plugins import deepgram, google, murf, noise_cancellation, silero
 from livekit.plugins.turn_detector.multilingual import MultilingualModel
 
+import db
+
 logger = logging.getLogger("agent")
 
 load_dotenv(".env.local")
+db.init_db()
 
 # Change this prompt to change what your voice agent does.
 # See README.md for example prompts (customer support, language tutor, receptionist).
@@ -117,26 +125,95 @@ VOICE REALISM
   yeah that's it."""
 
 
+def load_exercises():
+    exercises_path = os.path.join(os.path.dirname(__file__), "exercises.json")
+    if os.path.exists(exercises_path):
+        with open(exercises_path, encoding="utf-8") as f:
+            return json.load(f)
+    return []
+
+
 class Assistant(Agent):
     def __init__(self) -> None:
         super().__init__(instructions=SYSTEM_PROMPT)
 
-    # To add tools, use the @function_tool decorator.
-    # Here's an example that adds a simple weather tool.
-    # You also have to add `from livekit.agents import function_tool, RunContext` to the top of this file
-    # @function_tool
-    # async def lookup_weather(self, context: RunContext, location: str):
-    #     """Use this tool to look up current weather information in the given location.
-    #
-    #     If the location is not supported by the weather service, the tool will indicate this. You must tell the user the location's weather is unavailable.
-    #
-    #     Args:
-    #         location: The location to look up weather information for (e.g. city name)
-    #     """
-    #
-    #     logger.info(f"Looking up weather for {location}")
-    #
-    #     return "sunny with a temperature of 70 degrees."
+    @function_tool
+    async def lookup_caller(self, context: RunContext, user_id: str) -> str:
+        """Look up stored information about the current caller by their user_id or phone number.
+
+        Args:
+            user_id: The unique identifier or phone number of the caller.
+        """
+        caller_info = db.get_caller(user_id)
+        if caller_info:
+            return (
+                f"Caller Info for {user_id}: Name={caller_info.get('name')}, "
+                f"Last Topic={caller_info.get('last_topic')}, Facts={caller_info.get('facts')}, "
+                f"Opted Out={bool(caller_info.get('opted_out'))}"
+            )
+        return f"No previous records found for caller {user_id}."
+
+    @function_tool
+    async def remember_caller_fact(
+        self,
+        context: RunContext,
+        user_id: str,
+        name: Optional[str] = None,
+        last_topic: Optional[str] = None,
+        fact: Optional[str] = None,
+    ) -> str:
+        """Save or update facts, name, or last studied topic for the caller in memory.
+
+        Args:
+            user_id: Caller's user ID or phone number.
+            name: Caller's name if provided.
+            last_topic: The topic/concept covered in this session.
+            fact: Any notable fact or preference to remember about the caller.
+        """
+        db.save_caller(
+            user_id=user_id,
+            name=name,
+            last_topic=last_topic,
+            facts=fact,
+            opted_out=False,
+        )
+        return f"Updated memory for caller {user_id}."
+
+    @function_tool
+    async def fetch_next_exercise(
+        self, context: RunContext, topic: Optional[str] = None
+    ) -> str:
+        """Fetch the next AI/ML concept practice question for the learner.
+
+        Args:
+            topic: Optional specific concept topic to retrieve an exercise for.
+        """
+        exercises = load_exercises()
+        if not exercises:
+            return "No practice exercises are currently available."
+
+        if topic:
+            matching = [
+                e for e in exercises if topic.lower() in e.get("topic", "").lower()
+            ]
+            if matching:
+                ex = matching[0]
+                return f"Topic: {ex['topic']}\nQuestion: {ex['question']}\nHint: {ex['hints'][0]}"
+
+        ex = exercises[0]
+        return (
+            f"Topic: {ex['topic']}\nQuestion: {ex['question']}\nHint: {ex['hints'][0]}"
+        )
+
+    @function_tool
+    async def opt_out_caller(self, context: RunContext, user_id: str) -> str:
+        """Opt the caller out of daily practice calls and unsubscribe them from future sessions.
+
+        Args:
+            user_id: The phone number or user ID of the caller opting out.
+        """
+        db.save_caller(user_id=user_id, opted_out=True)
+        return f"Caller {user_id} has been opted out and unsubscribed from future practice calls."
 
 
 server = AgentServer()

@@ -1,0 +1,26 @@
+[
+  {
+    "id": 1,
+    "topic": "Retrieval-Augmented Generation (RAG)",
+    "question": "What is the primary role of the retriever component in a Retrieval-Augmented Generation system?",
+    "hints": ["Think about open-book exams vs closed-book exams."]
+  },
+  {
+    "id": 2,
+    "topic": "Backpropagation & Chain Rule",
+    "question": "Why is the calculus chain rule critical for backpropagation during neural network training?",
+    "hints": ["Think about how error gradients propagate backward layer by layer."]
+  },
+  {
+    "id": 3,
+    "topic": "AI Agent Loops & Tool Call Architecture",
+    "question": "In an AI agent loop, how does the agent use tool execution results to decide its next action?",
+    "hints": ["Consider the perception-action loop and updating the context state."]
+  },
+  {
+    "id": 4,
+    "topic": "Graph-based Orchestration",
+    "question": "Why would you use state graphs instead of simple linear chains for complex multi-step AI reasoning?",
+    "hints": ["Consider branching logic, dynamic loops, and conditional execution paths."]
+  }
+]
