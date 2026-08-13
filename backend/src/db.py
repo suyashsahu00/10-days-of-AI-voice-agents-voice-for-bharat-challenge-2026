@@ -9,7 +9,6 @@ def init_db():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
 
-    # Callers table
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS callers (
             user_id TEXT PRIMARY KEY,
@@ -21,7 +20,6 @@ def init_db():
         )
     """)
 
-    # Escalations table
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS escalations (
             ref_id TEXT PRIMARY KEY,
@@ -33,6 +31,17 @@ def init_db():
             follow_up TEXT,
             status TEXT DEFAULT 'open',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS calls (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id TEXT,
+            room_name TEXT,
+            outcome TEXT,
+            started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            ended_at TIMESTAMP
         )
     """)
 
@@ -132,3 +141,53 @@ def get_escalations():
     rows = cursor.fetchall()
     conn.close()
     return [dict(r) for r in rows]
+
+
+def save_call(user_id: str, room_name: str, outcome: str):
+    """outcome: 'success' or 'failed'"""
+    init_db()
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute(
+        """INSERT INTO calls (user_id, room_name, outcome, ended_at)
+           VALUES (?, ?, ?, CURRENT_TIMESTAMP)""",
+        (user_id, room_name, outcome),
+    )
+    conn.commit()
+    conn.close()
+
+
+def get_call_stats():
+    init_db()
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("SELECT COUNT(*) FROM calls")
+    total = cursor.fetchone()[0]
+    cursor.execute("SELECT COUNT(*) FROM calls WHERE outcome='success'")
+    successful = cursor.fetchone()[0]
+    cursor.execute("SELECT COUNT(*) FROM calls WHERE outcome='failed'")
+    failed = cursor.fetchone()[0]
+    cursor.execute(
+        """SELECT user_id, room_name, outcome, ended_at
+           FROM calls ORDER BY ended_at DESC LIMIT 10"""
+    )
+    recent = [
+        {"user_id": r[0], "room_name": r[1], "outcome": r[2], "ended_at": r[3]}
+        for r in cursor.fetchall()
+    ]
+    conn.close()
+    return {
+        "total": total,
+        "successful": successful,
+        "failed": failed,
+        "recent": recent,
+    }
+
+
+def reset_calls():
+    init_db()
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM calls")
+    conn.commit()
+    conn.close()

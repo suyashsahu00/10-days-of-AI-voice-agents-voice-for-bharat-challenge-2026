@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 import os
@@ -60,70 +61,56 @@ in a text channel instead of improvising a fix blind.
 LANGUAGE
 Reply in the same language the learner just used.
 - Learner speaks in English → reply in English.
-- Learner speaks in Hindi (Devanagari or Roman) → reply in Hindi.
+- Learner speaks in Hindi → reply in Hindi.
 - Learner mixes both → mix both back, roughly in the same ratio.
 Technical words (RAG, vector database, embedding, backprop, token, node)
-always stay in English, no matter what language you are replying in.
+always stay in English.
 
 LANGUAGE & SCRIPT
 Always write every language in its own native script.
-Hindi → Devanagari (नमस्ते), never romanized (never "namaste").
-Same rule for all non-English languages.
+Hindi → Devanagari (नमस्ते), never romanized.
 
 GUARDRAILS
 Hard refusals:
-- Never write or dictate a complete solution to a graded assignment or exam
-  question. Explain the underlying concept instead.
-- Never fabricate a specific library API, parameter name, or version behavior
-  you are not confident about — flag uncertainty and point to docs.
+- Never write or dictate a complete solution to a graded assignment or exam.
+- Never fabricate a specific library API or version behavior — flag uncertainty.
 
 Never-claims:
-- Never state that a learner has a learning disability, ADHD, or any
-  diagnosable condition, even if they ask "am I just bad at this."
-- Never shame a wrong answer. Reframe: "close — here is the piece that is
-  different" or "that is a common mix-up, here is why."
-- Never claim mastery on the learner's behalf unless they have actually
-  demonstrated it across the conversation.
+- Never state a learner has a learning disability or any diagnosable condition.
+- Never shame a wrong answer. Reframe constructively.
+- Never claim mastery unless demonstrated across the conversation.
 
 ESCALATION — WHEN TO ASK FOR HUMAN HELP
-You must call create_escalation in exactly two situations:
-1. The learner is emotionally distressed — they say things like "I am stupid",
-   "I give up", "I hate this", "I cannot do this", "I want to quit", or show
-   repeated frustration across multiple turns.
-2. The learner explicitly asks for a human teacher, mentor, or says they want
-   to talk to a real person.
+Call create_escalation in exactly two situations:
+1. Learner is emotionally distressed — says things like "I am stupid",
+   "I give up", "I hate this", "I cannot do this", repeated frustration.
+2. Learner explicitly asks for a human teacher or mentor.
 
 Before calling create_escalation you MUST:
-- Tell the learner what information you want to share: their name, what topic
-  they were studying, what you already covered, and their language preference.
-- Ask for permission out loud: "Kya main yeh details ek human mentor ke saath
-  share kar sakti hoon, taaki wo tumse follow up kar sakein?"
-- Only call create_escalation if they say yes. If they say no, respect it,
-  do not call the tool, and continue the conversation normally.
-- After the tool returns a ref_id, tell the learner the reference ID and what
-  happens next. Do not promise immediate reply.
+- Tell the learner what you want to share.
+- Ask permission: "Kya main yeh details ek human mentor ke saath share kar
+  sakti hoon?"
+- Only call the tool if they say yes.
+- After tool returns, tell the learner the reference ID and next steps.
+  Do not promise immediate reply.
 
-Do NOT escalate for:
-- A wrong answer
-- A learner who is confused but not distressed
-- Any normal learning struggle
+Do NOT escalate for wrong answers, confusion, or normal learning struggle.
 
 MEMORY & CONSENT
-- Before calling remember_caller_fact, say so out loud and wait for a yes.
+- Before calling remember_caller_fact, ask out loud and wait for yes.
 - If they decline, do not call the tool.
 - Only store facts relevant to AI/ML learning progress.
 
 EXERCISES
-- Once the learner has just correctly explained or clearly grasped a concept,
-  proactively offer a practice exercise using fetch_next_exercise.
-- Do not offer an exercise before a concept has landed.
-- Speak the question naturally, never read it like JSON.
+- Once the learner has clearly grasped a concept, proactively offer a
+  practice exercise using fetch_next_exercise. Do not offer mid-explanation.
+- Speak the question naturally, never like JSON.
 - If the tool is unavailable, say so in one sentence and move on verbally.
 
 STYLE
 Short sentences under 20 words — this is spoken, not read. No bulleted lists
-out loud. Pace: pause after a new term. On silence 2-3s: re-prompt once with
-a simpler question. On second silence: offer to pause.
+out loud. Pause after a new term. On silence 2-3s: re-prompt once with a
+simpler question. On second silence: offer to pause.
 
 VOICE REALISM
 - Filler words sparingly, never stacked.
@@ -144,6 +131,11 @@ def load_exercises():
 class Assistant(Agent):
     def __init__(self) -> None:
         super().__init__(instructions=SYSTEM_PROMPT)
+        self._exercise_fetched = False
+        self._learner_responded = False
+        self._escalation_created = False
+        self._fact_saved = False
+        self._user_turns = 0
 
     @function_tool
     async def lookup_caller(self, context: RunContext, user_id: str) -> str:
@@ -171,8 +163,8 @@ class Assistant(Agent):
         last_topic: Optional[str] = None,
         fact: Optional[str] = None,
     ) -> str:
-        """Save or update facts about the caller in memory. Only call this
-        after explicitly asking the caller for permission and receiving a yes.
+        """Save or update facts about the caller. Only call after explicit
+        permission from the caller.
 
         Args:
             user_id: Caller's user ID or phone number.
@@ -187,6 +179,7 @@ class Assistant(Agent):
             facts=fact,
             opted_out=False,
         )
+        self._fact_saved = True
         return f"Updated memory for caller {user_id}."
 
     @function_tool
@@ -204,8 +197,8 @@ class Assistant(Agent):
             exercises = load_exercises()
             if not exercises:
                 return (
-                    "The practice set is unavailable right now. Tell the learner "
-                    "in one sentence and offer to talk through the concept verbally."
+                    "The practice set is unavailable. Tell the learner in one "
+                    "sentence and offer to talk through the concept verbally."
                 )
             if topic:
                 matching = [
@@ -213,22 +206,24 @@ class Assistant(Agent):
                 ]
                 if matching:
                     ex = matching[0]
+                    self._exercise_fetched = True
                     return (
                         f"Exercise: {ex['question']} "
                         f"Hint if stuck: {ex['hints'][0]} "
-                        "Ask naturally. Do not reveal the hint unless they are stuck."
+                        "Ask naturally. Do not reveal the hint unless stuck."
                     )
             ex = exercises[0]
+            self._exercise_fetched = True
             return (
                 f"Exercise: {ex['question']} "
                 f"Hint if stuck: {ex['hints'][0]} "
-                "Ask naturally. Do not reveal the hint unless they are stuck."
+                "Ask naturally. Do not reveal the hint unless stuck."
             )
         except Exception as e:
             logger.warning(f"fetch_next_exercise failed: {e}")
             return (
-                "The practice set is unavailable right now. Tell the learner "
-                "in one sentence and move on verbally. Do not invent a question."
+                "The practice set is unavailable. Tell the learner in one "
+                "sentence and move on verbally. Do not invent a question."
             )
 
     @function_tool
@@ -242,23 +237,22 @@ class Assistant(Agent):
         language: str,
         follow_up: str,
     ) -> str:
-        """Create a human escalation request. Only call this after:
-        1. The learner is emotionally distressed OR explicitly asked for a human.
-        2. You have told the learner what you are sharing.
-        3. The learner said yes to sharing their information.
-        Never call this without explicit permission.
+        """Create a human escalation request. Only call after explicit
+        permission from the learner.
 
         Args:
             user_id: Caller's user ID or phone number.
             name: Caller's name.
-            reason: One of 'learner_distressed' or 'requested_human_teacher'.
-            summary: Short summary — what happened, what was covered, what was tried.
-                     Do not include passwords, OTPs, PINs, or account numbers.
-            language: Language the learner used e.g. 'Hindi', 'English', 'Hinglish'.
-            follow_up: How the learner wants to be reached e.g. 'phone', 'email', 'WhatsApp'.
+            reason: 'learner_distressed' or 'requested_human_teacher'.
+            summary: Short summary of what happened and what was covered.
+                     No passwords, OTPs, PINs, or account numbers.
+            language: Language the learner used e.g. 'Hindi', 'Hinglish'.
+            follow_up: How they want to be reached e.g. 'phone', 'email'.
         """
         try:
+            self._escalation_created = True
             timestamp = datetime.now().strftime("%Y%m%d-%H%M")
+
             ref_id = f"ESC-{timestamp}"
 
             db.save_escalation(
@@ -281,9 +275,9 @@ class Assistant(Agent):
                     "embeds": [
                         {
                             "title": f"Sydney Escalation — {ref_id}",
-                            "color": 16711680
-                            if reason == "learner_distressed"
-                            else 16744272,
+                            "color": (
+                                16711680 if reason == "learner_distressed" else 16744272
+                            ),
                             "fields": [
                                 {
                                     "name": "Reason",
@@ -295,14 +289,26 @@ class Assistant(Agent):
                                     "value": name or "Unknown",
                                     "inline": True,
                                 },
-                                {"name": "Language", "value": language, "inline": True},
+                                {
+                                    "name": "Language",
+                                    "value": language,
+                                    "inline": True,
+                                },
                                 {
                                     "name": "Follow-up via",
                                     "value": follow_up,
                                     "inline": True,
                                 },
-                                {"name": "User ID", "value": user_id, "inline": False},
-                                {"name": "Summary", "value": summary, "inline": False},
+                                {
+                                    "name": "User ID",
+                                    "value": user_id,
+                                    "inline": False,
+                                },
+                                {
+                                    "name": "Summary",
+                                    "value": summary,
+                                    "inline": False,
+                                },
                             ],
                             "footer": {"text": f"Reference ID: {ref_id}"},
                             "timestamp": datetime.utcnow().isoformat(),
@@ -310,8 +316,8 @@ class Assistant(Agent):
                     ]
                 }
                 async with (
-                    aiohttp.ClientSession() as session,
-                    session.post(
+                    aiohttp.ClientSession() as http_session,
+                    http_session.post(
                         DISCORD_WEBHOOK_URL,
                         json=discord_payload,
                     ) as resp,
@@ -321,17 +327,18 @@ class Assistant(Agent):
 
             logger.info(f"Escalation created: {ref_id} for {user_id}")
             return (
-                f"Escalation created successfully. Reference ID: {ref_id}. "
-                "Tell the learner their reference ID and that a human mentor will "
-                "review this and follow up within 24 hours. Do not promise faster."
+                f"Escalation created. Reference ID: {ref_id}. "
+                "Tell the learner their reference ID and that a human mentor "
+                "will review this and follow up within 24 hours. "
+                "Do not promise faster."
             )
 
         except Exception as e:
             logger.error(f"create_escalation failed: {e}")
             return (
-                "The escalation could not be saved right now. Tell the learner "
-                "you were unable to create the request and suggest they reach out "
-                "to a mentor directly."
+                "The escalation could not be saved. Tell the learner you were "
+                "unable to create the request and suggest they reach out to a "
+                "mentor directly."
             )
 
     @function_tool
@@ -359,6 +366,8 @@ server.setup_fnc = prewarm
 async def my_agent(ctx: JobContext):
     ctx.log_context_fields = {"room": ctx.room.name}
 
+    assistant = Assistant()
+
     session = AgentSession(
         stt=deepgram.STT(model="nova-3", language="multi"),
         llm=google.LLM(model="gemini-3.5-flash-lite"),
@@ -374,7 +383,7 @@ async def my_agent(ctx: JobContext):
     )
 
     await session.start(
-        agent=Assistant(),
+        agent=assistant,
         room=ctx.room,
         room_options=room_io.RoomOptions(
             audio_input=room_io.AudioInputOptions(
@@ -389,6 +398,51 @@ async def my_agent(ctx: JobContext):
     )
 
     await ctx.connect()
+
+    participant = await ctx.wait_for_participant()
+    user_id = participant.identity or "unknown"
+    room_name = ctx.room.name
+
+    disconnect_event = asyncio.Event()
+
+    @ctx.room.on("disconnected")
+    def _on_room_disconnected(*args):
+        disconnect_event.set()
+
+    @ctx.room.on("participant_disconnected")
+    def _on_participant_disconnected(*args):
+        disconnect_event.set()
+
+    @session.on("user_speech_committed")
+    def _on_user_speech(*args):
+        assistant._user_turns += 1
+        if assistant._exercise_fetched:
+            assistant._learner_responded = True
+
+    try:
+        await disconnect_event.wait()
+    finally:
+        # A call is SUCCESSFUL if:
+        # 1. The caller had a real conversation (at least 2 turns)
+        # 2. OR an exercise was fetched AND the learner responded verbally after it
+        # 3. OR a human escalation was created (_escalation_created)
+        # 4. OR the caller's learning facts/progress were successfully saved (_fact_saved)
+        is_success = (
+            assistant._user_turns >= 2
+            or (assistant._exercise_fetched and assistant._learner_responded)
+            or assistant._escalation_created
+            or assistant._fact_saved
+        )
+        outcome = "success" if is_success else "failed"
+
+        db.save_call(
+            user_id=user_id,
+            room_name=room_name,
+            outcome=outcome,
+        )
+        logger.info(
+            f"Call ended — user: {user_id}, room: {room_name}, outcome: {outcome}"
+        )
 
 
 if __name__ == "__main__":
