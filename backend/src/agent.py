@@ -24,6 +24,7 @@ from livekit.plugins import deepgram, google, murf, noise_cancellation, silero
 from livekit.plugins.turn_detector.multilingual import MultilingualModel
 
 import db
+from specialists import ExamPrepSpecialistAgent, RAGSpecialistAgent
 
 logger = logging.getLogger("agent")
 
@@ -106,6 +107,17 @@ EXERCISES
   practice exercise using fetch_next_exercise. Do not offer mid-explanation.
 - Speak the question naturally, never like JSON.
 - If the tool is unavailable, say so in one sentence and move on verbally.
+
+SPECIALIST HANDOFF
+You have two specialists available:
+- transfer_to_rag_specialist: for architecture-level RAG questions beyond
+  what you cover yourself — chunking trade-offs, vector database choice,
+  hybrid search, reranking, production RAG failure modes.
+- transfer_to_exam_prep_specialist: for mock interview or quiz-me requests —
+  not for a normal fetch_next_exercise practice question.
+Call the matching tool only when the learner's request clearly needs that
+specialist. Do not hand off for anything you can answer yourself at your
+normal teaching level.
 
 STYLE
 Short sentences under 20 words — this is spoken, not read. No bulleted lists
@@ -350,6 +362,46 @@ class Assistant(Agent):
         """
         db.save_caller(user_id=user_id, opted_out=True)
         return f"Caller {user_id} has been opted out of future practice calls."
+
+    @function_tool
+    async def transfer_to_rag_specialist(self, context: RunContext):
+        """Transfer the learner to the RAG Deep-Dive Specialist. Use this
+        only when the learner wants to go beyond a basic RAG explanation
+        into architecture-level depth — chunking strategy trade-offs, vector
+        database selection, hybrid search, reranking, or production RAG
+        failure modes. Do not call this for a first-time "what is RAG"
+        question — handle that yourself. Only call this when the learner's
+        question needs specialist-level depth beyond your own scope."""
+        await self.session.generate_reply(
+            instructions=(
+                "Tell the learner in one short sentence, in the same "
+                "language they've been using, that you're connecting them "
+                "to Sydney's RAG specialist for a deeper dive."
+            )
+        )
+        return RAGSpecialistAgent(
+            chat_ctx=self.chat_ctx.copy(exclude_instructions=True)
+        )
+
+    @function_tool
+    async def transfer_to_exam_prep_specialist(self, context: RunContext):
+        """Transfer the learner to the Exam and Interview Prep Specialist.
+        Use this only when the learner explicitly asks to practice for an
+        interview, wants to be quizzed or tested rapid-fire on ML/AI
+        concepts, or says something like "test me", "quiz me", or "mock
+        interview". Do not call this for a normal practice exercise
+        request — use fetch_next_exercise for that instead. This tool is
+        only for interview-style testing."""
+        await self.session.generate_reply(
+            instructions=(
+                "Tell the learner in one short sentence, in the same "
+                "language they've been using, that you're connecting them "
+                "to Sydney's exam and interview prep specialist."
+            )
+        )
+        return ExamPrepSpecialistAgent(
+            chat_ctx=self.chat_ctx.copy(exclude_instructions=True)
+        )
 
 
 server = AgentServer()
