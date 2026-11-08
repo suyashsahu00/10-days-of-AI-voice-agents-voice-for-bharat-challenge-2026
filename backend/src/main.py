@@ -117,16 +117,17 @@ async def root(request: Request):
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Real-Time Study Companion Backend</title>
+  <title>Real-Time Study Companion — Voice for Bharat</title>
   <style>
     :root {
-      --bg: #0f172a;
-      --card-bg: #1e293b;
-      --text: #f8fafc;
+      --bg: #0b0f19;
+      --card-bg: #151e32;
+      --text: #f1f5f9;
       --accent: #6366f1;
       --accent-hover: #4f46e5;
       --muted: #94a3b8;
-      --border: #334155;
+      --border: #23314e;
+      --success: #10b981;
     }
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -139,14 +140,14 @@ async def root(request: Request):
       align-items: center;
     }
     .container {
-      max-width: 800px;
+      max-width: 840px;
       width: 100%;
     }
     .header {
       text-align: center;
       margin-bottom: 2rem;
     }
-    h1 { margin: 0 0 0.5rem 0; font-size: 2.2rem; }
+    h1 { margin: 0.5rem 0; font-size: 2.2rem; }
     p.subtitle { color: var(--muted); margin: 0; font-size: 1.1rem; }
     .card {
       background: var(--card-bg);
@@ -154,16 +155,16 @@ async def root(request: Request):
       border-radius: 12px;
       padding: 1.5rem;
       margin-bottom: 1.5rem;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
     }
     .badge {
       display: inline-block;
       padding: 0.35rem 0.75rem;
       border-radius: 9999px;
-      background: #10b981;
+      background: var(--success);
       color: white;
       font-weight: 600;
       font-size: 0.85rem;
-      margin-bottom: 0.5rem;
     }
     .pipeline {
       display: grid;
@@ -172,59 +173,137 @@ async def root(request: Request):
       margin-top: 1rem;
     }
     .pipeline-item {
-      background: #0f172a;
+      background: #0b0f19;
       border: 1px solid var(--border);
-      padding: 0.75rem;
+      padding: 0.85rem;
       border-radius: 8px;
     }
-    .pipeline-item strong { display: block; color: var(--accent); font-size: 0.85rem; }
+    .pipeline-item strong { display: block; color: #818cf8; font-size: 0.85rem; margin-bottom: 0.25rem; }
     .pipeline-item span { font-size: 0.95rem; }
+    .quick-topics {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin: 0.75rem 0;
+    }
+    .chip {
+      background: #1e293b;
+      border: 1px solid var(--border);
+      color: #c7d2fe;
+      padding: 0.3rem 0.75rem;
+      border-radius: 9999px;
+      font-size: 0.85rem;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .chip:hover {
+      background: var(--accent);
+      color: white;
+      border-color: var(--accent);
+    }
     textarea {
       width: 100%;
       box-sizing: border-box;
-      height: 120px;
-      background: #0f172a;
+      height: 140px;
+      background: #0b0f19;
       border: 1px solid var(--border);
       border-radius: 8px;
       color: var(--text);
-      padding: 0.75rem;
+      padding: 0.85rem;
       font-family: inherit;
+      font-size: 0.95rem;
+      line-height: 1.5;
       resize: vertical;
-      margin-top: 0.5rem;
     }
-    button {
+    textarea:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+    .actions {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      margin-top: 1rem;
+    }
+    button.btn-primary {
       background: var(--accent);
       color: white;
       border: none;
-      padding: 0.75rem 1.5rem;
+      padding: 0.85rem 1.75rem;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 1rem;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      transition: background 0.2s;
+    }
+    button.btn-primary:hover:not(:disabled) { background: var(--accent-hover); }
+    button.btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
+    button.btn-secondary {
+      background: #1e293b;
+      color: #f1f5f9;
+      border: 1px solid var(--border);
+      padding: 0.6rem 1.2rem;
       border-radius: 8px;
       font-weight: 600;
       cursor: pointer;
-      margin-top: 0.75rem;
-      transition: background 0.2s;
+      font-size: 0.9rem;
     }
-    button:hover { background: var(--accent-hover); }
-    #resultBox {
+    button.btn-secondary:hover { background: #334155; }
+    #statusIndicator {
       display: none;
       margin-top: 1rem;
-      padding: 1rem;
+      padding: 0.75rem 1rem;
       border-radius: 8px;
-      background: #0f172a;
+      background: rgba(99, 102, 241, 0.15);
       border: 1px solid var(--accent);
+      color: #c7d2fe;
+      font-size: 0.95rem;
+    }
+    #resultCard {
+      display: none;
+      margin-top: 1.5rem;
+      padding: 1.25rem;
+      border-radius: 8px;
+      background: #0b0f19;
+      border: 1px solid var(--border);
+    }
+    #teachingText {
+      line-height: 1.65;
+      font-size: 1.05rem;
       white-space: pre-wrap;
+      margin-bottom: 1.5rem;
     }
-    a.link {
-      color: #818cf8;
-      text-decoration: none;
-      font-weight: 500;
+    .takeaways {
+      background: #151e32;
+      border-left: 4px solid var(--success);
+      padding: 1rem;
+      border-radius: 4px;
+      margin-bottom: 1.25rem;
     }
+    .takeaways h4 { margin: 0 0 0.5rem 0; color: var(--success); }
+    .takeaways ul { margin: 0; padding-left: 1.2rem; }
+    .takeaways li { margin-bottom: 0.35rem; font-size: 0.95rem; }
+    a.link { color: #818cf8; text-decoration: none; font-weight: 500; }
     a.link:hover { text-decoration: underline; }
+    .spinner {
+      width: 16px;
+      height: 16px;
+      border: 2px solid #ffffff;
+      border-top-color: transparent;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      display: inline-block;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
   </style>
 </head>
 <body>
   <div class="container">
     <div class="header">
-      <span class="badge">LiveKit + Gemini + Murf Falcon Voice Agent</span>
+      <span class="badge">LiveKit WebRTC + Murf Falcon TTS + Google Gemini</span>
       <h1>Real-Time Study Companion</h1>
       <p class="subtitle">7th-Semester Computer Science Professor & Exam Study Buddy</p>
     </div>
@@ -242,10 +321,10 @@ async def root(request: Request):
         </div>
         <div class="pipeline-item">
           <strong>TTS (Voice)</strong>
-          <span>Murf Falcon (Anisha)</span>
+          <span>Murf Falcon (Anisha / Marcus)</span>
         </div>
         <div class="pipeline-item">
-          <strong>Transport</strong>
+          <strong>Real-Time Stream</strong>
           <span>LiveKit WebRTC</span>
         </div>
       </div>
@@ -253,39 +332,170 @@ async def root(request: Request):
 
     <div class="card">
       <h3 style="margin-top: 0;">Try Study Notes Conversion</h3>
-      <p style="color: var(--muted); margin: 0 0 0.5rem 0;">Paste raw syllabus notes (e.g. Artificial Neural Networks, MPU6050, Data Mining):</p>
-      <textarea id="notesInput" placeholder="Paste bullet points, tables, or syllabus text here...">MPU6050: 6-axis motion tracking sensor with 3-axis accelerometer and 3-axis gyroscope. Communicates over I2C bus at addresses 0x68 or 0x69.</textarea>
-      <button onclick="convertNotes()">Convert to Spoken Exam Teaching Script</button>
-      <div id="resultBox"></div>
+      <p style="color: var(--muted); margin: 0 0 0.5rem 0;">Paste raw syllabus notes, formulas, or pick a sample exam topic:</p>
+
+      <div class="quick-topics">
+        <span class="chip" onclick="loadSample('rnn')">RNNs & Feedback Loops</span>
+        <span class="chip" onclick="loadSample('mpu6050')">MPU6050 Accelerometer / I2C</span>
+        <span class="chip" onclick="loadSample('backprop')">ANN & Backpropagation</span>
+        <span class="chip" onclick="loadSample('apriori')">Data Mining & Apriori</span>
+      </div>
+
+      <textarea id="notesInput" placeholder="Paste bullet points, tables, or syllabus text here...">A **Recurrent Neural Network (RNN)** is a class of artificial neural networks designed specifically for processing **sequential or time-series data**. Unlike standard feedforward neural networks where inputs are processed independently, an RNN contains **feedback loops** that allow information to persist across consecutive time steps.</textarea>
+
+      <div class="actions">
+        <button id="convertBtn" class="btn-primary" onclick="convertNotes()">
+          <span>Convert to Spoken Exam Teaching Script</span>
+        </button>
+        <span style="color: var(--muted); font-size: 0.85rem;">(or press Ctrl+Enter)</span>
+      </div>
+
+      <div id="statusIndicator">
+        <span class="spinner" style="margin-right: 0.5rem; vertical-align: middle;"></span>
+        <span id="statusText">Consulting Google Gemini Professor... please wait (~5-10s)</span>
+      </div>
+
+      <div id="resultCard">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; border-bottom: 1px solid var(--border); padding-bottom: 0.75rem;">
+          <h3 style="margin: 0; color: #818cf8;">Spoken Teaching Script</h3>
+          <div style="display: flex; gap: 0.5rem;">
+            <button id="readAloudBtn" class="btn-secondary" onclick="toggleReadAloud()">🔊 Read Aloud</button>
+            <button class="btn-secondary" onclick="copyScript()">📋 Copy</button>
+          </div>
+        </div>
+
+        <div id="teachingText"></div>
+
+        <div class="takeaways">
+          <h4>Key High-Yield Exam Takeaways:</h4>
+          <ul id="takeawaysList"></ul>
+        </div>
+
+        <div style="margin-top: 1rem; padding-top: 0.75rem; border-top: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;">
+          <span style="color: var(--muted); font-size: 0.85rem;">Ready to practice live over voice?</span>
+          <a class="link" href="http://localhost:3000" target="_blank" style="font-weight: 600;">Launch LiveKit Voice Session &rarr;</a>
+        </div>
+      </div>
     </div>
 
     <div class="card" style="display: flex; justify-content: space-between; align-items: center;">
       <div>
         <strong>Interactive OpenAPI Docs:</strong>
-        <span style="color: var(--muted);">Explore all endpoints via Swagger</span>
+        <span style="color: var(--muted);">Explore all backend endpoints (/api/token, /api/study-notes) via Swagger</span>
       </div>
       <a class="link" href="/docs" target="_blank">Open /docs &rarr;</a>
     </div>
   </div>
 
   <script>
+    const samples = {
+      rnn: "A **Recurrent Neural Network (RNN)** is a class of artificial neural networks designed specifically for processing **sequential or time-series data**. Unlike standard feedforward neural networks where inputs are processed independently, an RNN contains **feedback loops** that allow information to persist across consecutive time steps.",
+      mpu6050: "MPU6050 is a 6-axis motion tracking sensor. It integrates a 3-axis MEMS accelerometer and a 3-axis MEMS gyroscope on the same silicon die. It communicates with microcontrollers using the I2C bus protocol (default address 0x68 or 0x69 when AD0 is HIGH). Accelerometer measures linear acceleration and gravity, while Gyroscope measures angular velocity in degrees per second.",
+      backprop: "Backpropagation is the primary algorithm used to train Artificial Neural Networks. It computes the gradient of the loss function with respect to each weight using the Chain Rule of calculus. The error is propagated backward from the output layer to the input layer, adjusting weights via gradient descent with learning rate alpha.",
+      apriori: "Apriori algorithm is used for Frequent Itemset Mining and Association Rule Learning in data mining. It operates on the downward-closure property: all non-empty subsets of a frequent itemset must also be frequent. Key metrics: Support (frequency of itemset), Confidence (conditional probability), and Lift (strength of rule over random coincidence)."
+    };
+
+    function loadSample(key) {
+      document.getElementById('notesInput').value = samples[key] || '';
+    }
+
+    document.getElementById('notesInput').addEventListener('keydown', function(e) {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        convertNotes();
+      }
+    });
+
+    let synthUtterance = null;
+
     async function convertNotes() {
-      const text = document.getElementById('notesInput').value;
-      const box = document.getElementById('resultBox');
-      box.style.display = 'block';
-      box.innerText = 'Consulting Gemini professor...';
+      const text = document.getElementById('notesInput').value.trim();
+      if (!text) {
+        alert('Please paste some syllabus notes or select a sample topic first!');
+        return;
+      }
+
+      const btn = document.getElementById('convertBtn');
+      const statusIndicator = document.getElementById('statusIndicator');
+      const statusText = document.getElementById('statusText');
+      const resultCard = document.getElementById('resultCard');
+      const teachingText = document.getElementById('teachingText');
+      const takeawaysList = document.getElementById('takeawaysList');
+
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> <span>Consulting Gemini Professor...</span>';
+      statusIndicator.style.display = 'block';
+      statusText.innerText = 'Connecting to Google Gemini 2.5 Flash... transforming dense notes into spoken script (~5-10s)';
+      resultCard.style.display = 'none';
 
       try {
         const res = await fetch('/api/study-notes', {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({notes: text, topic: 'Exam Revision'})
+          body: JSON.stringify({notes: text, topic: 'CS Exam Revision'})
         });
+
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.detail || `Server returned status ${res.status}`);
+        }
+
         const data = await res.json();
-        box.innerText = "Spoken Teaching Script:\n\n" + data.teaching_script;
+        teachingText.innerText = data.teaching_script || 'No script returned.';
+
+        takeawaysList.innerHTML = '';
+        if (data.key_takeaways && data.key_takeaways.length) {
+          data.key_takeaways.forEach(item => {
+            const li = document.createElement('li');
+            li.innerText = item;
+            takeawaysList.appendChild(li);
+          });
+        }
+
+        statusIndicator.style.display = 'none';
+        resultCard.style.display = 'block';
+        resultCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
       } catch (err) {
-        box.innerText = "Error: " + err.message;
+        statusIndicator.style.display = 'block';
+        statusIndicator.style.background = 'rgba(239, 68, 68, 0.2)';
+        statusIndicator.style.borderColor = '#ef4444';
+        statusIndicator.style.color = '#fca5a5';
+        statusText.innerHTML = '<strong>Error:</strong> ' + err.message + '<br><small>Ensure backend is running (uv run python src/main.py) and GEMINI_API_KEY/GOOGLE_API_KEY is configured in .env.local.</small>';
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<span>Convert to Spoken Exam Teaching Script</span>';
       }
+    }
+
+    function toggleReadAloud() {
+      const readBtn = document.getElementById('readAloudBtn');
+      const text = document.getElementById('teachingText').innerText;
+      if (!window.speechSynthesis) {
+        alert('Your browser does not support speech synthesis.');
+        return;
+      }
+
+      if (window.speechSynthesis.speaking) {
+        window.speechSynthesis.cancel();
+        readBtn.innerText = '🔊 Read Aloud';
+        return;
+      }
+
+      synthUtterance = new SpeechSynthesisUtterance(text);
+      synthUtterance.rate = 1.05;
+      synthUtterance.pitch = 1.0;
+      synthUtterance.onend = () => { readBtn.innerText = '🔊 Read Aloud'; };
+      synthUtterance.onerror = () => { readBtn.innerText = '🔊 Read Aloud'; };
+
+      window.speechSynthesis.speak(synthUtterance);
+      readBtn.innerText = '⏹️ Stop Audio';
+    }
+
+    function copyScript() {
+      const text = document.getElementById('teachingText').innerText;
+      navigator.clipboard.writeText(text).then(() => {
+        alert('Spoken script copied to clipboard!');
+      });
     }
   </script>
 </body>

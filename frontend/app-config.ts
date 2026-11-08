@@ -33,9 +33,10 @@ export interface AppConfig {
 }
 
 export const APP_CONFIG_DEFAULTS: AppConfig = {
-  companyName: 'Murf AI',
-  pageTitle: 'Voice Agent Starter',
-  pageDescription: 'A voice agent powered by Murf Falcon — the fastest TTS API',
+  companyName: 'Voice for Bharat',
+  pageTitle: 'Real-Time Study Companion',
+  pageDescription:
+    '7th-Semester CS Professor & Exam Study Buddy — Powered by Murf Falcon TTS & Google Gemini',
 
   supportsChatInput: true,
   supportsVideoInput: true,
@@ -46,17 +47,17 @@ export const APP_CONFIG_DEFAULTS: AppConfig = {
   accent: '#6366F1',
   logoDark: '/murf-logo-dark.svg',
   accentDark: '#818cf8',
-  startButtonText: 'Start talking',
+  startButtonText: 'Start revision session',
 
   // optional: audio visualization configuration
   audioVisualizerType: 'wave',
-  audioVisualizerColor: '#ff770f',
-  audioVisualizerColorDark: '#ff770f',
+  audioVisualizerColor: '#6366f1',
+  audioVisualizerColorDark: '#818cf8',
   audioVisualizerColorShift: 0.3,
   audioVisualizerWaveLineWidth: 2,
 
   // agent dispatch configuration
-  agentName: process.env.AGENT_NAME ?? undefined,
+  agentName: process.env.AGENT_NAME ?? 'my-agent',
 
   // LiveKit Cloud Sandbox configuration
   sandboxId: undefined,
