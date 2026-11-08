@@ -1,4 +1,6 @@
 import logging
+import os
+from pathlib import Path
 
 from dotenv import load_dotenv
 from livekit import rtc
@@ -8,141 +10,102 @@ from livekit.agents import (
     AgentSession,
     JobContext,
     JobProcess,
+    RunContext,
     cli,
+    function_tool,
     room_io,
     tokenize,
 )
 from livekit.plugins import deepgram, google, murf, noise_cancellation, silero
 from livekit.plugins.turn_detector.multilingual import MultilingualModel
 
-logger = logging.getLogger("agent")
+# Load environment variables from .env.local, .env, or parent directories
+env_paths = [
+    Path(".env.local"),
+    Path(".env"),
+    Path("../.env.local"),
+    Path("../.env"),
+]
+for p in env_paths:
+    if p.exists():
+        load_dotenv(p)
 
-load_dotenv(".env.local")
+# Ensure Gemini / Google API key compatibility
+gemini_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+if gemini_key:
+    os.environ["GOOGLE_API_KEY"] = gemini_key
+    os.environ["GEMINI_API_KEY"] = gemini_key
 
-# Change this prompt to change what your voice agent does.
-# See README.md for example prompts (customer support, language tutor, receptionist).
-SYSTEM_PROMPT = """IDENTITY
-You are Sydney, an AI/ML learning companion built for the "Learning & Literacy"
-track of 10 Days of Voice Agents, powered by Murf Falcon TTS. You work for the
-learner, not for any exam board or employer — your job is to build their
-understanding, not their credentials.
+logger = logging.getLogger("study-companion-agent")
 
-OBJECTIVES
-A successful call achieves:
-1. The learner leaves with a correct, self-explained understanding of ONE
-   concept (RAG, backprop, loop/agent architecture, graph-based orchestration,
-   etc.) — not a dump of five concepts half-understood.
-2. Within the first 2-3 turns, you've calibrated to their actual level
-   (total beginner vs. "I know Python but not transformers") rather than
-   assuming.
-3. The learner leaves knowing what to study next — a concept, not a copy-paste
-   answer to their assignment.
+# -----------------------------------------------------------------------------
+# 7th-Semester Computer Science Professor & Study Buddy System Prompt
+# -----------------------------------------------------------------------------
+SYSTEM_PROMPT = """You are an AI study companion. The user will provide technical exam notes or syllabus topics (e.g., Artificial Neural Networks, MPU6050, Data Mining). Your job is to read the text and explain it conversationally, concisely, and clearly, as if you are teaching it right before an exam. Do not read Markdown tables or bullet points literally; convert them into natural spoken sentences. Keep responses highly engaging and pause to ask if the user understood.
 
-KNOWLEDGE
-You know ML/DL/RAG/prompt-engineering/agent-loop/graph-engineering concepts at
-a solid conceptual and architectural level. You do NOT reliably know: current
-library APIs, exact function signatures, version-specific syntax, or anything
-released after your training data — for these, say so plainly and point them
-to official docs instead of guessing. You cannot see or debug their actual
-code over voice — if they need line-by-line debugging, tell them to paste it
-in a text channel instead of improvising a fix blind.
+ROLE & PERSONA:
+- You are a friendly, encouraging 7th-semester Computer Science professor and study buddy.
+- You have deep technical mastery across Computer Science, Electronics, and AI/ML, but you talk like an approachable mentor doing a rapid whiteboard revision session.
+- You distill dense academic syllabi into intuitive, high-scoring exam insights.
 
-LANGUAGE
-Reply in the same language the learner just used.
-- Learner types in English → reply in English.
-- Learner types in Hindi (Devanagari or Roman) → reply in Hindi.
-- Learner mixes both → mix both back, roughly in the same ratio.
-Technical words (RAG, vector database, embedding, backprop, token, node)
-always stay in English, no matter what language you're replying in.
-
-LANGUAGE & SCRIPT
-Always write every language in its own native script.
-Hindi → Devanagari (नमस्ते), never romanized (never "namaste").
-Same rule for all non-English languages.
-
-Example — learner asks in Hindi "RAG kya hai?":
-WRONG: "So, RAG — you mean retrieval-augmented generation. Here's the
-  thing. Imagine your LLM is a brilliant student..."
-WRONG (Romanized Hindi): "RAG matlab retrieval-augmented generation. Isse aise samjho —
-  soch lo tumhara LLM ek student hai jo open-book exam de raha hai..."
-RIGHT (Native scripts): "RAG मतलब retrieval-augmented generation. इसे ऐसे समझो —
-  सोच लो तुम्हारा LLM एक student है जो open-book exam दे रहा है..."
-
-GUARDRAILS
-Hard refusals:
-- Never write or dictate a complete solution to a graded assignment or exam
-  question. Explain the underlying concept instead; offer to walk through a
-  DIFFERENT example they can apply themselves.
-- Never fabricate a specific library API, parameter name, or version behavior
-  you're not confident about — flag uncertainty and point to docs.
-
-Never-claims:
-- Never state that a learner has a learning disability, ADHD, or any
-  diagnosable condition, even if they ask "am I just bad at this."
-- Never shame a wrong answer — no "no, that's wrong," no sighing tone.
-  Reframe: "close — here's the piece that's different" or "that's a common
-  mix-up, here's why."
-- Never claim mastery on the learner's behalf ("you've got this down") unless
-  they've actually demonstrated it across the conversation.
-
-Escalation script:
-If the learner expresses real frustration, repeated failure, or says
-something like "I'm just stupid" — stop teaching, acknowledge directly
-("that frustration is normal, this stuff is genuinely hard"), offer a break,
-and suggest a human mentor/instructor for anything beyond a quick concept
-check. Do not diagnose, do not push through.
-
-STYLE
-Short sentences (under ~20 words) — this is spoken, not read. No bulleted
-lists out loud; if you'd write a list, turn it into "first... then... and
-finally" spoken naturally. Pace: pause after introducing a new term to let it
-land. On silence (2-3s): re-prompt once with a simpler question, not a repeat
-of the same one. On a second silence: offer to pause the session rather than
-looping.
-
-VOICE REALISM
-- Use filler words sparingly (1 per 2-3 sentences max), never stacked.
-- Self-correct when introducing new concepts, not when stating known facts —
-  e.g. "so RAG retrieves the — actually, let's back up, what's a vector?"
-- Emotion adjusts warmth/pace only — never sharpness or the content of a
-  correction, even if the learner is being difficult or repeats a mistake.
-- Light non-verbal acknowledgments only (mm-hm, brief laugh at a genuine
-  mix-up) — no sighs or exhales, they read as judgmental against a no-shame
-  guardrail.
-- Recurring behavior: restate the question before answering it ("okay, why
-  does backprop need the chain rule — good one"); lead with an analogy before
-  the formal term.
-- Never repeat the same opener or affirmation phrase in back-to-back turns —
-  vary "so basically / here's the thing / okay so" and "exactly / right /
-  yeah that's it."""
+TEACHING & SPOKEN DELIVERY GUIDELINES:
+1. Pure Spoken Cadence: This conversation happens entirely over voice. Keep sentences short, punchy, and conversational (typically under 20 words each).
+2. No Literal Formatting: Never recite asterisks, hashes, backticks, bullet symbols, or table grid syntax out loud. Convert tables into natural comparative sentences (e.g., "Compared to supervised learning, unsupervised learning...").
+3. Analogies First, Formulas Second: Ground technical topics in vivid real-world intuition before mentioning technical jargon:
+   - Artificial Neural Networks (ANN): Weights as volume knobs, activation functions as threshold switches, backpropagation as adjusting knobs based on the final error.
+   - MPU6050: A 6-axis motion tracking sensor combining a 3-axis accelerometer (measures gravity and tilt) and a 3-axis gyroscope (measures angular velocity), communicating over I2C.
+   - Data Mining: Finding hidden gold in mountains of data—classification for categorizing, clustering for grouping without labels, association rules for market baskets.
+4. Active Checking: End explanations by briefly pausing and checking for understanding (e.g., "Does that picture make sense so far?", "Ready to look at how the equations work?", "Should we test this with a quick exam question?").
+5. Language & Tone: Confident, crisp, supportive, and energetic. If the student is confused, break the concept down into an even simpler analogy without making them feel bad.
+"""
 
 
 class Assistant(Agent):
     def __init__(self) -> None:
         super().__init__(instructions=SYSTEM_PROMPT)
 
-    # To add tools, use the @function_tool decorator.
-    # Here's an example that adds a simple weather tool.
-    # You also have to add `from livekit.agents import function_tool, RunContext` to the top of this file
-    # @function_tool
-    # async def lookup_weather(self, context: RunContext, location: str):
-    #     """Use this tool to look up current weather information in the given location.
-    #
-    #     If the location is not supported by the weather service, the tool will indicate this. You must tell the user the location's weather is unavailable.
-    #
-    #     Args:
-    #         location: The location to look up weather information for (e.g. city name)
-    #     """
-    #
-    #     logger.info(f"Looking up weather for {location}")
-    #
-    #     return "sunny with a temperature of 70 degrees."
+    @function_tool
+    async def explain_exam_concept(
+        self,
+        context: RunContext,
+        topic: str,
+        focus_area: str = "core intuition and exam questions",
+    ) -> str:
+        """Break down a specific computer science or engineering topic for an upcoming exam.
+
+        Args:
+            topic: The technical topic or syllabus unit (e.g., Backpropagation, MPU6050 I2C registers, Apriori Algorithm)
+            focus_area: Specific exam angle such as high-yield questions, numericals, or architectural trade-offs
+        """
+        logger.info(f"Explaining exam concept: {topic} (focus: {focus_area})")
+        return (
+            f"Here is the high-yield exam breakdown for '{topic}': "
+            f"Focus on the core principle, how it behaves during operation, and the standard 5-mark exam question asked on it. "
+            f"Deliver this explanation conversationally and ask the student if they understood."
+        )
+
+    @function_tool
+    async def quiz_student(
+        self,
+        context: RunContext,
+        topic: str,
+        difficulty: str = "medium",
+    ) -> str:
+        """Generate a quick 1-question verbal check to test the student's exam readiness on a topic.
+
+        Args:
+            topic: The subject or topic being revised
+            difficulty: 'easy', 'medium', or 'hard'
+        """
+        logger.info(f"Generating verbal quiz question for topic: {topic}")
+        return f"Formulate one sharp, high-yield exam question on {topic} ({difficulty} difficulty) and ask the student to answer in their own words."
 
 
 server = AgentServer()
 
 
 def prewarm(proc: JobProcess):
+    """Pre-load heavy models into memory (Silero VAD)."""
     proc.userdata["vad"] = silero.VAD.load()
 
 
@@ -151,58 +114,60 @@ server.setup_fnc = prewarm
 
 @server.rtc_session(agent_name="my-agent")
 async def my_agent(ctx: JobContext):
-    # Logging setup
-    # Add any other context you want in all log entries here
+    """LiveKit RTC session entry point for the Study Companion voice agent."""
     ctx.log_context_fields = {
         "room": ctx.room.name,
+        "agent": "study-companion",
     }
+    logger.info(f"Starting Real-Time Study Companion for room: {ctx.room.name}")
 
-    # Set up a voice AI pipeline using Murf Falcon, Gemini, Deepgram, and the LiveKit turn detector
+    # Determine configuration from environment
+    gemini_model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+    murf_voice = os.getenv("MURF_VOICE", "Anisha")
+    deepgram_model = os.getenv("DEEPGRAM_MODEL", "nova-3")
+
+    # Set up the voice AI pipeline:
+    # 1. Deepgram STT: turns student voice speech into text
+    # 2. Google Gemini: converts syllabus notes and questions into conversational exam explanations
+    # 3. Murf Falcon TTS: renders the teacher's voice in real-time
     session = AgentSession(
-        # Speech-to-text (STT) is your agent's ears, turning the user's speech into text that the LLM can understand
-        # See all available models at https://docs.livekit.io/agents/models/stt/
-        stt=deepgram.STT(model="nova-3", language="multi"),
-        # A Large Language Model (LLM) is your agent's brain, processing user input and generating a response
-        # See all available models at https://docs.livekit.io/agents/models/llm/
-        llm=google.LLM(
-            model="gemini-3.5-flash-lite",
+        stt=deepgram.STT(
+            model=deepgram_model,
+            language="multi",
         ),
-        # Text-to-speech (TTS) is your agent's voice, turning the LLM's text into speech that the user can hear
-        # See all available models as well as voice selections at https://docs.livekit.io/agents/models/tts/
+        llm=google.LLM(
+            model=gemini_model,
+            api_key=gemini_key,
+        ),
         tts=murf.TTS(
-            voice="Anisha",
+            voice=murf_voice,
             style="Conversation",
             tokenizer=tokenize.basic.SentenceTokenizer(min_sentence_len=2),
             text_pacing=True,
         ),
-        # VAD and turn detection are used to determine when the user is speaking and when the agent should respond
-        # See more at https://docs.livekit.io/agents/build/turns
         turn_detection=MultilingualModel(),
         vad=ctx.proc.userdata["vad"],
-        # allow the LLM to generate a response while waiting for the end of turn
-        # See more at https://docs.livekit.io/agents/build/audio/#preemptive-generation
         preemptive_generation=True,
     )
 
-    # To use a realtime model instead of a voice pipeline, use the following session setup instead.
-    # (Note: This is for the OpenAI Realtime API. For other providers, see https://docs.livekit.io/agents/models/realtime/))
-    # 1. Install livekit-agents[openai]
-    # 2. Set OPENAI_API_KEY in .env.local
-    # 3. Add `from livekit.plugins import openai` to the top of this file
-    # 4. Use the following session setup instead of the version above
-    # session = AgentSession(
-    #     llm=openai.realtime.RealtimeModel(voice="marin")
-    # )
+    # Listen for incoming data packets (e.g. study notes / syllabus text submitted by user via UI)
+    @ctx.room.on("data_received")
+    def on_data_received(data_packet: rtc.DataPacket):
+        try:
+            raw_text = data_packet.data.decode("utf-8")
+            logger.info(f"Received study notes via data packet: {raw_text[:60]}...")
+            session.generate_reply(
+                user_input=(
+                    f'The student just submitted these study notes/text:\n"{raw_text}"\n\n'
+                    "Please explain these notes conversationally and concisely for their upcoming exam. "
+                    "Do not read bullet points or markdown tables literally. "
+                    "Keep it highly engaging and pause to ask if they understood."
+                )
+            )
+        except Exception as exc:
+            logger.error(f"Failed to process incoming study notes data: {exc}")
 
-    # # Add a virtual avatar to the session, if desired
-    # # For other providers, see https://docs.livekit.io/agents/models/avatar/
-    # avatar = hedra.AvatarSession(
-    #   avatar_id="...",  # See https://docs.livekit.io/agents/models/avatar/plugins/hedra
-    # )
-    # # Start the avatar and wait for it to join
-    # await avatar.start(session, room=ctx.room)
-
-    # Start the session, which initializes the voice pipeline and warms up the models
+    # Start the session and connect room IO
     await session.start(
         agent=Assistant(),
         room=ctx.room,
@@ -218,8 +183,24 @@ async def my_agent(ctx: JobContext):
         ),
     )
 
-    # Join the room and connect to the user
+    # Join the room and connect WebRTC streams
     await ctx.connect()
+    logger.info(
+        f"Agent joined room {ctx.room.name}. Waiting for participant to connect..."
+    )
+
+    # Wait for the student to join the room
+    participant = await ctx.wait_for_participant()
+    logger.info(f"Student participant connected: {participant.identity}")
+
+    # Automatic greeting: Agent answers immediately when user connects
+    session.generate_reply(
+        instructions=(
+            "Greet the student warmly and enthusiastically as their 7th-semester Computer Science professor "
+            "and study buddy. Welcome them to today's exam revision session, and ask what technical syllabus topic "
+            "or study notes (like Artificial Neural Networks, MPU6050, or Data Mining) they want to master right now."
+        )
+    )
 
 
 if __name__ == "__main__":
