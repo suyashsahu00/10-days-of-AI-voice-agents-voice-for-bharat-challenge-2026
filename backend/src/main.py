@@ -7,8 +7,9 @@ from pathlib import Path
 from typing import Optional
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel, Field
 
 # Ensure src directory is in sys.path
@@ -108,19 +109,203 @@ class HealthResponse(BaseModel):
 # API Endpoints
 # -----------------------------------------------------------------------------
 @app.get("/", tags=["General"])
-async def root():
-    return {
-        "service": "Real-Time Study Companion Voice Agent",
-        "description": "7th-Semester Computer Science Professor & Study Buddy",
-        "pipeline": {
-            "stt": "Deepgram Nova-3",
-            "llm": "Google Gemini 2.5 Flash",
-            "tts": "Murf Falcon (Anisha / Conversation)",
-            "transport": "LiveKit WebRTC",
-        },
-        "docs": "/docs",
-        "health": "/health",
+async def root(request: Request):
+    accept_header = request.headers.get("accept", "")
+    if "text/html" in accept_header:
+        html_content = """<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Real-Time Study Companion Backend</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card-bg: #1e293b;
+      --text: #f8fafc;
+      --accent: #6366f1;
+      --accent-hover: #4f46e5;
+      --muted: #94a3b8;
+      --border: #334155;
     }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      margin: 0;
+      padding: 2rem 1rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .container {
+      max-width: 800px;
+      width: 100%;
+    }
+    .header {
+      text-align: center;
+      margin-bottom: 2rem;
+    }
+    h1 { margin: 0 0 0.5rem 0; font-size: 2.2rem; }
+    p.subtitle { color: var(--muted); margin: 0; font-size: 1.1rem; }
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+    .badge {
+      display: inline-block;
+      padding: 0.35rem 0.75rem;
+      border-radius: 9999px;
+      background: #10b981;
+      color: white;
+      font-weight: 600;
+      font-size: 0.85rem;
+      margin-bottom: 0.5rem;
+    }
+    .pipeline {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+      gap: 1rem;
+      margin-top: 1rem;
+    }
+    .pipeline-item {
+      background: #0f172a;
+      border: 1px solid var(--border);
+      padding: 0.75rem;
+      border-radius: 8px;
+    }
+    .pipeline-item strong { display: block; color: var(--accent); font-size: 0.85rem; }
+    .pipeline-item span { font-size: 0.95rem; }
+    textarea {
+      width: 100%;
+      box-sizing: border-box;
+      height: 120px;
+      background: #0f172a;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      padding: 0.75rem;
+      font-family: inherit;
+      resize: vertical;
+      margin-top: 0.5rem;
+    }
+    button {
+      background: var(--accent);
+      color: white;
+      border: none;
+      padding: 0.75rem 1.5rem;
+      border-radius: 8px;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 0.75rem;
+      transition: background 0.2s;
+    }
+    button:hover { background: var(--accent-hover); }
+    #resultBox {
+      display: none;
+      margin-top: 1rem;
+      padding: 1rem;
+      border-radius: 8px;
+      background: #0f172a;
+      border: 1px solid var(--accent);
+      white-space: pre-wrap;
+    }
+    a.link {
+      color: #818cf8;
+      text-decoration: none;
+      font-weight: 500;
+    }
+    a.link:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <span class="badge">LiveKit + Gemini + Murf Falcon Voice Agent</span>
+      <h1>Real-Time Study Companion</h1>
+      <p class="subtitle">7th-Semester Computer Science Professor & Exam Study Buddy</p>
+    </div>
+
+    <div class="card">
+      <h3 style="margin-top: 0;">Active Architecture Pipeline</h3>
+      <div class="pipeline">
+        <div class="pipeline-item">
+          <strong>STT (Ears)</strong>
+          <span>Deepgram Nova-3</span>
+        </div>
+        <div class="pipeline-item">
+          <strong>LLM (Brain)</strong>
+          <span>Google Gemini 2.5 Flash</span>
+        </div>
+        <div class="pipeline-item">
+          <strong>TTS (Voice)</strong>
+          <span>Murf Falcon (Anisha)</span>
+        </div>
+        <div class="pipeline-item">
+          <strong>Transport</strong>
+          <span>LiveKit WebRTC</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3 style="margin-top: 0;">Try Study Notes Conversion</h3>
+      <p style="color: var(--muted); margin: 0 0 0.5rem 0;">Paste raw syllabus notes (e.g. Artificial Neural Networks, MPU6050, Data Mining):</p>
+      <textarea id="notesInput" placeholder="Paste bullet points, tables, or syllabus text here...">MPU6050: 6-axis motion tracking sensor with 3-axis accelerometer and 3-axis gyroscope. Communicates over I2C bus at addresses 0x68 or 0x69.</textarea>
+      <button onclick="convertNotes()">Convert to Spoken Exam Teaching Script</button>
+      <div id="resultBox"></div>
+    </div>
+
+    <div class="card" style="display: flex; justify-content: space-between; align-items: center;">
+      <div>
+        <strong>Interactive OpenAPI Docs:</strong>
+        <span style="color: var(--muted);">Explore all endpoints via Swagger</span>
+      </div>
+      <a class="link" href="/docs" target="_blank">Open /docs &rarr;</a>
+    </div>
+  </div>
+
+  <script>
+    async function convertNotes() {
+      const text = document.getElementById('notesInput').value;
+      const box = document.getElementById('resultBox');
+      box.style.display = 'block';
+      box.innerText = 'Consulting Gemini professor...';
+
+      try {
+        const res = await fetch('/api/study-notes', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({notes: text, topic: 'Exam Revision'})
+        });
+        const data = await res.json();
+        box.innerText = "Spoken Teaching Script:\n\n" + data.teaching_script;
+      } catch (err) {
+        box.innerText = "Error: " + err.message;
+      }
+    }
+  </script>
+</body>
+</html>"""
+        return HTMLResponse(content=html_content)
+
+    return JSONResponse(
+        content={
+            "service": "Real-Time Study Companion Voice Agent",
+            "description": "7th-Semester Computer Science Professor & Study Buddy",
+            "pipeline": {
+                "stt": "Deepgram Nova-3",
+                "llm": "Google Gemini 2.5 Flash",
+                "tts": "Murf Falcon (Anisha / Conversation)",
+                "transport": "LiveKit WebRTC",
+            },
+            "docs": "/docs",
+            "health": "/health",
+        }
+    )
 
 
 @app.get("/health", response_model=HealthResponse, tags=["General"])
@@ -285,6 +470,16 @@ def run_fastapi_server(host: str = "0.0.0.0", port: int = 8000):
     """Run the FastAPI server via uvicorn."""
     import uvicorn
 
+    display_host = "localhost" if host in ("0.0.0.0", "127.0.0.1") else host
+    print(
+        f"\n============================================================\n"
+        f"  Real-Time Study Companion Backend is Running!\n"
+        f"  -> Open in your browser:  http://{display_host}:{port}\n"
+        f"  -> Interactive Swagger:   http://{display_host}:{port}/docs\n"
+        f"  (Note: Windows browsers cannot open 0.0.0.0, use localhost)\n"
+        f"============================================================\n",
+        flush=True,
+    )
     uvicorn.run("main:app", host=host, port=port, reload=False)
 
 
